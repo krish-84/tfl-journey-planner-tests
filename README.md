@@ -2,13 +2,12 @@
 
 Automated UI tests for the **Plan a journey** widget on [tfl.gov.uk/plan-a-journey](https://tfl.gov.uk/plan-a-journey), written in **C#** with **Gherkin** (Reqnroll), **Playwright for .NET** and **NUnit**.
 
-|               |                                                                              |
+| Area          | Choice                                                                       |
 | ------------- | ---------------------------------------------------------------------------- |
 | Language      | C# / .NET 10                                                                 |
 | BDD / Gherkin | [Reqnroll](https://reqnroll.net)                                             |
 | UI automation | [Microsoft.Playwright](https://playwright.dev/dotnet/) driving Google Chrome |
 | Test runner   | NUnit                                                                        |
-| CI            | GitHub Actions (`.github/workflows/ui-tests.yml`)                            |
 
 Additional functional and non-functional scenarios (not automated, as requested) are in **[ADDITIONAL-SCENARIOS.md](ADDITIONAL-SCENARIOS.md)**.
 
@@ -19,25 +18,28 @@ Additional functional and non-functional scenarios (not automated, as requested)
 ### Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- Google Chrome (installed normally). No separate browser driver is needed (see _Playwright and ChromeDriver_ below).
+- Google Chrome (installed normally). No separate browser driver is needed.
 
 ### Run
 
+From the repository root:
+
 ```bash
-cd TflJourneyPlanner.Tests
-dotnet test
+dotnet test TflJourneyPlanner.Tests
 ```
 
 ### Useful options (environment variables)
 
-| Variable             | Default              | Purpose                                                                                        |
-| -------------------- | -------------------- | ---------------------------------------------------------------------------------------------- |
-| `HEADLESS`           | `true`               | `false` opens a visible browser window, for watching or debugging                              |
-| `SLOW_MO_MS`         | `0`                  | Slows every action down, e.g. `500`, useful for demos                                          |
-| `BROWSER_CHANNEL`    | `chrome`             | `msedge` for Edge, or `chromium` for Playwright's bundled browser (needs `playwright install`) |
-| `BASE_URL`           | `https://tfl.gov.uk` | Point the same tests at another environment                                                    |
-| `DEFAULT_TIMEOUT_MS` | `15000`              | Maximum wait for elements and assertions                                                       |
-| `RESULTS_TIMEOUT_MS` | `45000`              | Longer maximum wait for journey search results only (see decision 6)                           |
+| Variable             | Default              | Purpose                                                                                |
+| -------------------- | -------------------- | -------------------------------------------------------------------------------------- |
+| `HEADLESS`           | `true`               | `false` opens a visible browser window, for watching or debugging                      |
+| `SLOW_MO_MS`         | `0`                  | Slows every action down, e.g. `500`, useful for demos                                  |
+| `BROWSER_CHANNEL`    | `chrome`             | `msedge` for Edge, or `chromium` for Playwright's bundled browser (needs it installed) |
+| `BASE_URL`           | `https://tfl.gov.uk` | Point the same tests at another environment                                            |
+| `DEFAULT_TIMEOUT_MS` | `15000`              | Maximum wait for elements and assertions                                               |
+| `RESULTS_TIMEOUT_MS` | `45000`              | Longer maximum wait for journey search results only (see decision 6)                   |
+
+From the repository root:
 
 ```bash
 # Watch the tests run
@@ -53,7 +55,7 @@ When a scenario fails, a **full-page screenshot** and a **Playwright trace** are
 
 ## What is covered
 
-All scenarios are in [`Features/JourneyPlanner.feature`](TflJourneyPlanner.Tests/Features/JourneyPlanner.feature)
+All scenarios are in [`Features/JourneyPlanner.feature`](TflJourneyPlanner.Tests/Features/JourneyPlanner.feature).
 
 | #   | Scenario                                                        | What it checks                                                                                                                                                                                                           |
 | --- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -86,7 +88,7 @@ TflJourneyPlanner.Tests/
 
 **1. Reqnroll for Gherkin, not SpecFlow.** SpecFlow reached end of life in December 2024. Reqnroll is its community-maintained successor, with the same syntax and concepts, so I chose the supported option for a new framework.
 
-**2. Page Object Model with dependency injection.** Steps describe _intent_, and page objects own _how_. If TfL changes its HTML, only one file changes. Reqnroll's built-in container gives each scenario its own page objects through constructors, with no static or shared state.
+**2. Page Object Model with dependency injection.** Steps describe _intent_, and page objects own _how_. If TfL changes its HTML, only one file changes. Reqnroll's built-in container gives each scenario its own page objects through constructors, so no state is shared between scenarios.
 
 **3. One browser per run, a fresh context per scenario.** Launching a browser is slow, so it is shared across the run. Each scenario gets a new **browser context** (like a fresh incognito window), so cookies and history never leak between tests, and any scenario can run on its own, in any order.
 
@@ -94,7 +96,7 @@ TflJourneyPlanner.Tests/
 
 **5. Locator strategy.** In order of preference: accessible **role + name** for buttons and options (`GetByRole(Button, "Update journey")`), which is what a user or screen reader sees; then stable **ids** the site provides (`#InputFrom`, `#option-1-content`); and only then descriptive CSS classes where nothing better exists (`.journey-box.walking`). There are no XPath or position-based selectors. The one exception to role-based lookup is the "View details" button: the site hides it from the accessibility tree (see _Observations_, item 4).
 
-**6. No fixed sleeps.** Every wait uses Playwright's auto-waiting and web-first assertions (`Expect(...).ToBeVisibleAsync()`), which retry until the condition holds or time out. Two places needed extra care:
+**6. No fixed sleeps.** Every wait uses Playwright's auto-waiting and web-first assertions (`Expect(...).ToBeVisibleAsync()`), which retry until the condition holds or time out. Three places needed extra care:
 
 - **Negative results load asynchronously**, so asserting "0 options" straight away would pass _before the search finished_ (a false positive). The test waits for the "no results" message first, then asserts the count.
 - **Update journey** happens while already on a `/results` URL, so the test waits for the URL to _change_ rather than just match.
@@ -123,7 +125,7 @@ These came up while building the tests. I would raise them with the team for dis
 3. **Optimistic cycle time.** For Leicester Square → Covent Garden (0.4 km) the cycling time shown was 1 minute (about 24 km/h, including setting off and stopping), compared with a 6-minute walk. This might be worth checking against the routing assumptions.
 4. **Accessibility defect: the "View details" and "Map view" buttons are hidden from assistive technology.** Both are visible, focusable `<button>`s marked `aria-hidden="true"`. Screen reader users can tab to a control that is never announced, which fails WCAG 2.2 SC 4.1.2 (Name, Role, Value) and the axe-core rule `aria-hidden-focus`. My test first located the button by role and name, as a screen reader would, and could not find it. That is how this defect surfaced. The test now locates the button by CSS class instead, with a comment explaining why.
 5. **The cookie overlay can stay stuck after consent.** Intermittently, after "Accept only essential cookies" is clicked, the banner disappears but its invisible full-screen overlay stays in place, so the page looks normal but nothing can be clicked until it is refreshed. This showed up in about 2 of 12 runs of the negative scenarios. The tests handle it by reloading once, because the consent choice has already been saved by then, and the handling is commented in `CookieBanner.cs`.
-6. **The results page sometimes never starts its search.** Intermittently, the results page loads but the background search request is never sent, so the page stays blank with no journeys and no message. The Playwright trace confirms that no search request was made in 45 seconds. This happens in the browser, not on a slow server, so waiting longer doesn't help, and a real user would have to refresh. These are functional tests, so the framework logs a warning and reloads once (`ReloadOnceIfNotShownAsync` in `JourneyResultsPage.cs`). It has been seen both before the journey summary appears and before the results arrive, so both waits use it. This is the only retry for the results page in the suite. Reliability and performance of the search belong in API and non-functional testing.
+6. **The results page sometimes never starts its search.** Intermittently, the results page loads but the background search request is never sent, so the page stays blank with no journeys and no message. The Playwright trace confirms that no search request was made before the test timed out. This happens in the browser, not on a slow server, so waiting longer doesn't help, and a real user would have to refresh. In every failing trace, the results page logged `jQuery is not defined` (after `jquery.min.js` returned a 304), followed by an error in TfL's own start-up script. Neither error appeared in passing runs, so this is the likely cause, though not yet confirmed. These are functional tests, so the framework logs a warning and reloads once (`ReloadOnceIfNotShownAsync` in `JourneyResultsPage.cs`). It has been seen both before the journey summary appears and before the results arrive, so both waits use it. This is the only retry for the results page in the suite. Reliability and performance of the search belong in API and non-functional testing.
 7. **"Routes with least walking" involves more walking than walking.** With _least walking_ selected, the suggested route takes 11 minutes and its accessibility details show **10 minutes of walking** (5 minutes to the platform, 1 minute on the Piccadilly line, 5 minutes out). Walking all the way takes **6 minutes**. The algorithm appears to compare only public transport routes with each other. For a user who chose "least walking" because walking is hard for them, that result is misleading.
 
 ---
@@ -132,7 +134,5 @@ These came up while building the tests. I would raise them with the team for dis
 
 This project was developed with the help of AI assistant. AI was used to:
 
-- propose the framework structure
-- javascript and typescript are the languages that I have worked in the career. So being new to cs had to use a lot of help to set up
-- having worked with cucumber ages ago, was slightly out of touch and never have worked with specflow or reqnroll. So again took a lot of help but I, now understand and can explain and also comfortably add more tests
-- help taken to write this READ.ME file, especially for the non-functional bit as its an area that I understand but haven't been involved much with
+- Propose the framework structure.
+- My background is mainly JavaScript and TypeScript, and I last used Cucumber some years ago, so I relied on it heavily for the C#, .NET and Reqnroll side.
